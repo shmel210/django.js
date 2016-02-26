@@ -5,8 +5,11 @@ import json
 import logging
 
 from django.conf import settings
+from django.template.loader import get_template
+from django.template.context import make_context
 from django.template.context import RequestContext
 from django.utils import translation, six
+from django.utils.functional import SimpleLazyObject
 
 from djangojs.conf import settings
 from djangojs.utils import LazyJsonEncoder
@@ -41,18 +44,23 @@ class ContextSerializer(object):
         '''
         data = {}
         if settings.JS_CONTEXT_ENABLED:
-            for context in RequestContext(self.request):
-                for key, value in six.iteritems(context):
-                    if settings.JS_CONTEXT and key not in settings.JS_CONTEXT:
-                        continue
-                    if settings.JS_CONTEXT_EXCLUDE and key in settings.JS_CONTEXT_EXCLUDE:
-                        continue
-                    handler_name = 'process_%s' % key
-                    if hasattr(self, handler_name):
-                        handler = getattr(self, handler_name)
-                        data[key] = handler(value, data)
-                    elif isinstance(value, SERIALIZABLE_TYPES):
-                        data[key] = value
+            template = get_template('djangojs/init.js')
+            request_context = make_context({}, self.request)
+            request_context.render_context.push()
+            with request_context.bind_template(template.template):
+                request_context.template_name = template.template.name
+                for context in request_context:
+                    for key, value in six.iteritems(context):
+                        if settings.JS_CONTEXT and key not in settings.JS_CONTEXT:
+                            continue
+                        if settings.JS_CONTEXT_EXCLUDE and key in settings.JS_CONTEXT_EXCLUDE:
+                            continue
+                        handler_name = 'process_%s' % key
+                        if hasattr(self, handler_name):
+                            handler = getattr(self, handler_name)
+                            data[key] = handler(value, data)
+                        elif isinstance(value, SERIALIZABLE_TYPES) and not isinstance(value, SimpleLazyObject):
+                            data[key] = value
         if settings.JS_USER_ENABLED:
             self.handle_user(data)
         # Monkey patch for https://github.com/noirbizarre/django.js/issues/53
