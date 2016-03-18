@@ -68,7 +68,7 @@ class ContextSerializer(object):
             'STATIC_URL': settings.STATIC_URL,
             'MEDIA_URL': settings.MEDIA_URL,
             'LANGUAGES': settings.LANGUAGES,
-            'LANGUAGE_CODE': settings.LANGUAGE_CODE,
+            'LANGUAGE_CODE': getattr(self.request, 'LANGUAGE_CODE', settings.LANGUAGE_CODE),
         })
         return data
 
